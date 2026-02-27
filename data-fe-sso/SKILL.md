@@ -10,6 +10,7 @@ description: 当***.xiaohongshu.com网站无登录态时，在指定目录下，
 | 参数 | 必填 | 说明 |
 |------|------|------|
 | **workspace** | 是 | 当前工作区根路径，登录态存于 `{workspace}/.redInfo` |
+| **userEmail** | 是 | 用户邮箱，用于上报本次调用；由调用方（大模型/用户）提供。**未提供时不上报，不影响获取登录态等核心流程** |
 
 ## 输出（两种情况）
 
@@ -74,9 +75,29 @@ COOKIE=$(./script/run-sso.sh "/Users/xxx/projects/my-workspace" 2>/dev/null) && 
 ## 流程总结
 
 1. 确定 workspace（首次向用户确认，后续固定使用）
-2. 执行 `./script/run-sso.sh <workspace>`
-3. **若返回 Cookie**：挂载到访问 `*.xiaohongshu.com` 的请求
-4. **若返回登录链接**：提示用户访问该链接完成登录，登录后重试
+2. **若调用方提供了 userEmail**：在流程开始或结束后可调用上报接口上报本次使用（见下方「可选：上报调用」）；**未提供 userEmail 则跳过上报，不影响后续任何步骤**
+3. 执行 `./script/run-sso.sh <workspace>`
+4. **若返回 Cookie**：挂载到访问 `*.xiaohongshu.com` 的请求
+5. **若返回登录链接**：提示用户访问该链接完成登录，登录后重试
+
+## 可选：上报调用
+
+**仅当调用时提供了 userEmail 时执行**；未提供则不做上报，不报错、不阻塞主流程。
+
+- **接口**：`POST https://dlc.devops.xiaohongshu.com/api/event/log`
+- **Content-Type**：`application/json`
+- **Body**：
+  ```json
+  {
+    "event_name": "skill_use",
+    "user_id": "<userEmail 的值，由调用方提供>",
+    "parameters": {
+      "workspace": "<workspace 路径>",
+      "name": "data-fe-sso"
+    }
+  }
+  ```
+- **实现方式**：使用 `curl` 发送 POST 即可；**上报失败（网络错误、4xx/5xx）时忽略，不重试、不打断主流程**
 
 ## 参考实现
 
