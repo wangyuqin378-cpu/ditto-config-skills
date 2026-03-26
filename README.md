@@ -4,37 +4,45 @@
 
 ## 是什么
 
-`ditto-config-skills` 是一套 [Claude Code](https://claude.ai/claude-code) Skills，让你可以用自然语言完成原本需要手动在 Ditto 数据配置中心上点来点去的工作——比如批量上传植物图片、从 Excel 更新物料数据。
+`ditto-config-skills` 是一套 [Claude Code](https://claude.ai/claude-code) Skills，让你可以用自然语言完成原本需要手动在 Ditto 数据配置中心反复操作的工作——批量上传图片、从 Excel 写入物料数据，支持任意模块的任意数据结构。
 
 ---
 
 ## 包含的 Skills
 
-### `configsdk-plant-image`
+### `ditto-material-config`
 
-批量上传图片并配置到 Ditto 物料配置平台指定模块。
+将本地图片或 Excel 数据批量写入 Ditto 物料配置平台指定模块。
 
 **触发方式：**
-- "帮我配置植物图片"
-- 粘贴 Ditto 配置页链接 + 说"上传图片"
-- "从 Excel 更新物料数据"
+- "帮我配置物料"
+- 粘贴 Ditto 配置页链接 + 说"上传/更新"
+- "把这个 Excel 写入 ditto 某个模块"
 
-**支持两种输入模式：**
+**工作方式：**
 
-| 模式 | 说明 |
+模型先读取模块现有数据，理解字段结构，再基于用户提供的内容生成新数据——无需预设任何字段，适配任意物料类型。
+
+| 输入方式 | 说明 |
+|---------|------|
+| 图片目录 | 批量上传目录下图片，收集 CDN URL 和尺寸 |
+| Excel + 图片目录 | 读取表格，图片列填文件名，自动匹配上传 |
+
+底层由三个独立脚本支撑：
+
+| 脚本 | 功能 |
 |------|------|
-| 图片目录 | 批量上传目录下所有图片，自动构造植物数据 |
-| Excel + 图片目录 | 从 `.xlsx` 读取植物属性，「植物图片」列填文件名，自动匹配上传 |
-
-Excel 列格式（A-E）：植物id / 植物名称 / 植物类型 / 价格 / 植物图片（文件名）
+| `upload-image.sh` | 上传单张图片，返回 `url width height` |
+| `query-module.sh` | 查询模块列表或读取模块现有数据 |
+| `submit-module.sh` | 提交数据到指定模块（其余模块原样保留） |
 
 ---
 
 ### `data-fe-sso`
 
-小红书内网统一登录态管理。访问 `*.xiaohongshu.com` 域名前自动获取并维护 Cookie。
+小红书内网统一登录态管理。访问 `*.xiaohongshu.com` 前自动获取并维护 Cookie。
 
-同时管理图片上传所需的 `porch_beaker_session_id`（存储后 7 天内自动复用）。
+同时管理图片上传所需的 `porch_beaker_session_id`（存储后约 7 天内自动复用）。
 
 ---
 
@@ -45,7 +53,7 @@ Excel 列格式（A-E）：植物id / 植物名称 / 植物类型 / 价格 / 植
 git clone https://github.com/wangyuqin378-cpu/ditto-config-skills.git
 
 # 软链接到 Claude skills 目录
-ln -s $(pwd)/ditto-config-skills/configsdk-plant-image ~/.claude/skills/configsdk-plant-image
+ln -s $(pwd)/ditto-config-skills/ditto-material-config ~/.claude/skills/ditto-material-config
 ln -s $(pwd)/ditto-config-skills/data-fe-sso ~/.claude/skills/data-fe-sso
 ```
 
@@ -55,7 +63,7 @@ ln -s $(pwd)/ditto-config-skills/data-fe-sso ~/.claude/skills/data-fe-sso
 
 ## 首次使用
 
-**1. 存储 porch session**（图片上传专用，只需一次）
+**1. 存储 porch session**（图片上传专用，只需一次，7 天内有效）
 
 在浏览器打开 `fe.devops.xiaohongshu.com`，DevTools → Network，复制任意请求头中的 `porch_beaker_session_id`：
 
@@ -66,11 +74,11 @@ bash data-fe-sso/script/set-porch-session.sh /path/to/workspace <porch_beaker_se
 **2. 直接对话**
 
 ```
-帮我把这个目录的图片配置到 ditto 上
+帮我更新 ditto 这个配置里的物料数据
 https://ditto.devops.xiaohongshu.com/ditto-dataconfig-center/data-configuration/preview/699
 ```
 
-Claude 会自动引导你完成剩余步骤。
+Claude 会自动查询模块列表、读取现有数据结构，引导你完成剩余步骤。
 
 ---
 
