@@ -1,0 +1,9 @@
+# 登录态文件（含 token、porch session 等敏感信息）
+.redInfo
+
+# macOS
+.DS_Store
+
+# Python
+__pycache__/
+*.pyc

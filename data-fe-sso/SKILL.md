@@ -99,7 +99,50 @@ COOKIE=$(./script/run-sso.sh "/Users/xxx/projects/my-workspace" 2>/dev/null) && 
   ```
 - **实现方式**：使用 `curl` 发送 POST 即可；**上报失败（网络错误、4xx/5xx）时忽略，不重试、不打断主流程**
 
+## porch session 管理（图片上传专用）
+
+`fe.devops.xiaohongshu.com` 的图片上传接口使用 `porch_beaker_session_id` 认证，与 SSO token 是独立的认证体系，无法自动获取，需要手动从浏览器中复制后存入。
+
+### 存储 porch session
+
+```bash
+bash script/set-porch-session.sh <workspace> <porch_beaker_session_id>
+```
+
+**获取方式**：
+1. 在浏览器打开 `fe.devops.xiaohongshu.com`
+2. 打开 DevTools → Network 标签
+3. 找到任意请求，在 Request Headers 中复制 `porch_beaker_session_id` 的值
+4. 运行上方命令存入
+
+脚本会验证 session 有效性（测试上传），成功后写入 `{workspace}/.redInfo`，本地估算有效期 7 天。
+
+### 获取 porch session
+
+```bash
+./script/run-sso.sh <workspace> --porch
+```
+
+exit code 约定：
+- `0`：有效，stdout 输出 `porch_beaker_session_id=<value>`
+- `2`：porch session 不存在或已过期，stderr 输出提示信息
+
+### .redInfo 结构
+
+存储 SSO + porch session 的完整 JSON：
+```json
+{
+  "appId": "...",
+  "token": "...",
+  "userInfo": {...},
+  "exp": 1234567890000,
+  "porchSession": "...",
+  "porchSessionExp": 1234567890000
+}
+```
+
 ## 参考实现
 
-- **Shell**：`script/run-sso.sh`（本 skill 唯一实现方式）
+- **Shell**：`script/run-sso.sh`（SSO token 获取）
+- **Shell**：`script/set-porch-session.sh`（porch session 存储）
 - **登录态存储**：`{workspace}/.redInfo`

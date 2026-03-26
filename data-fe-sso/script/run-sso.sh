@@ -1,16 +1,19 @@
 #!/usr/bin/env bash
 #
 # SSO 登录流程 Shell 脚本
-# 用法: ./run-sso.sh <workspace>
+# 用法:
+#   ./run-sso.sh <workspace>          # 获取 SSO token (common-internal-access-token-prod)
+#   ./run-sso.sh <workspace> --porch  # 获取 porch session (porch_beaker_session_id)
+#
 # 必须传入 workspace 路径，登录态存于 {workspace}/.redInfo
 #
-# 三条路径：
-# 1. .redInfo 存在且登录态有效 → 返回登录态
-# 2. .redInfo 不存在 → 新建 appId 保存，提示访问 URL 登录
-# 3. .redInfo 存在但登录态无效/过期 → 通过接口获取并存储；接口失败则提示访问 URL 登录
+# SSO token 模式 exit code:
+#   0: 有效，stdout 输出 common-internal-access-token-prod=<token>
+#   1: 未登录，stderr 输出登录 URL
 #
-# 成功时输出: common-internal-access-token-prod={token}
-# 需登录时输出登录 URL 到 stderr 并 exit 1
+# porch session 模式 (--porch) exit code:
+#   0: 有效，stdout 输出 porch_beaker_session_id=<value>
+#   2: porch session 不存在或已过期，stderr 输出提示信息
 #
 
 set -e
@@ -22,9 +25,10 @@ LOGIN_PAGE_URL="${API_BASE_URL}/login"
 APP_DESC="${APP_DESC:-XCodeBook}"
 
 # 必须传入 workspace 路径
-[[ -n "${1:-}" ]] || { echo "用法: $0 <workspace>" >&2; echo "必须传入 workspace 路径，登录态将存于 {workspace}/.redInfo" >&2; exit 1; }
+[[ -n "${1:-}" ]] || { echo "用法: $0 <workspace> [--porch]" >&2; echo "必须传入 workspace 路径，登录态将存于 {workspace}/.redInfo" >&2; exit 1; }
 BASE_DIR="$1"
 AUTH_FILE="${BASE_DIR}/.redInfo"
+MODE="${2:-}"
 
 # 检查 jq
 command -v jq >/dev/null 2>&1 || { echo "需要安装 jq: brew install jq" >&2; exit 1; }
@@ -110,7 +114,39 @@ output_login_url() {
   exit 1
 }
 
+get_porch_session() {
+  if [[ ! -f "$AUTH_FILE" ]]; then
+    echo "porch session 未设置，请运行: bash $(dirname "$0")/set-porch-session.sh <workspace> <porch_beaker_session_id>" >&2
+    echo "在浏览器 fe.devops.xiaohongshu.com 的 Network 请求中复制 porch_beaker_session_id" >&2
+    exit 2
+  fi
+
+  local porch_session porch_exp now
+  porch_session=$(jq -r '.porchSession // empty' "$AUTH_FILE" 2>/dev/null)
+  porch_exp=$(jq -r '.porchSessionExp // 0' "$AUTH_FILE" 2>/dev/null)
+  now=$(($(date +%s) * 1000))
+
+  if [[ -z "$porch_session" ]]; then
+    echo "porch session 未设置，请运行: bash $(dirname "$0")/set-porch-session.sh <workspace> <porch_beaker_session_id>" >&2
+    echo "在浏览器 fe.devops.xiaohongshu.com 的 Network 请求中复制 porch_beaker_session_id" >&2
+    exit 2
+  fi
+
+  if [[ "$porch_exp" -gt 0 && "$now" -ge "$porch_exp" ]]; then
+    echo "porch session 已过期，请重新运行: bash $(dirname "$0")/set-porch-session.sh <workspace> <porch_beaker_session_id>" >&2
+    exit 2
+  fi
+
+  echo "porch_beaker_session_id=${porch_session}"
+}
+
 main() {
+  # porch session 模式
+  if [[ "$MODE" == "--porch" ]]; then
+    get_porch_session
+    return
+  fi
+
   # 路径 1: .redInfo 存在且登录态有效
   if [[ -f "$AUTH_FILE" ]]; then
     local token exp now
