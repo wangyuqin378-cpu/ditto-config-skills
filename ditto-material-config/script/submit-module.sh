@@ -48,23 +48,25 @@ print(json.dumps({
     }
 }))" "$CONFIG_ID" "$COOKIE")
 
-QUERY_RESP=$(curl -s -X POST "$CONFIGSDK_MCP_URL" \
+QUERY_TMP=$(mktemp /tmp/query_resp_XXXXXX.json)
+PAYLOAD_TMP=$(mktemp /tmp/submit_payload_XXXXXX.json)
+trap 'rm -f "$QUERY_TMP" "$PAYLOAD_TMP"' EXIT
+
+curl -s -X POST "$CONFIGSDK_MCP_URL" \
   -H "Content-Type: application/json" \
   -H "Accept: application/json, text/event-stream" \
   -H "cookie: $COOKIE" \
-  -d "$QUERY_PAYLOAD")
+  -d "$QUERY_PAYLOAD" > "$QUERY_TMP"
 
 # 构造提交 payload（目标模块替换，其余原样）
-PAYLOAD_TMP=$(mktemp /tmp/submit_payload_XXXXXX.json)
-trap 'rm -f "$PAYLOAD_TMP"' EXIT
-
-python3 - "$QUERY_RESP" "$DATA_FILE" "$CONFIG_ID" "$MODULE_ID" "$COOKIE" "$OPERATION_TYPE" "$PAYLOAD_TMP" <<'PYEOF'
+python3 - "$QUERY_TMP" "$DATA_FILE" "$CONFIG_ID" "$MODULE_ID" "$COOKIE" "$OPERATION_TYPE" "$PAYLOAD_TMP" <<'PYEOF'
 import json, sys
 
-query_resp_str, data_file, config_id, module_id, cookie, operation_type, payload_file = sys.argv[1:]
+query_file, data_file, config_id, module_id, cookie, operation_type, payload_file = sys.argv[1:]
 operation_type = int(operation_type)
 
-d = json.loads(query_resp_str)
+with open(query_file) as f:
+    d = json.load(f)
 text = json.loads(d['result']['content'][0]['text'])
 modules = text['material']['modules']
 

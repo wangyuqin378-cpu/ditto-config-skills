@@ -22,14 +22,13 @@ allowed-tools:
 
 ## 前置依赖
 
-依赖两套认证，均存储在 `{workspace}/.redInfo`：
+仅依赖 SSO token，存储在 `{workspace}/.redInfo`：
 
 | 认证 | 用途 | 获取方式 |
 |------|------|---------|
-| SSO token | configsdk MCP 查询/提交 | `run-sso.sh <workspace>` 自动获取 |
-| porch session | 图片上传到 fe.devops | 手动从浏览器复制，运行 `set-porch-session.sh <workspace> <value>` 存储，有效期约 7 天 |
+| SSO token | configsdk MCP 查询/提交 + 图片上传 | `run-sso.sh <workspace>` 自动获取 |
 
-**首次使用必须先存储 porch session。**
+图片上传使用 edith.xiaohongshu.com permit + COS PUT 两步上传，**不再需要 porch session**。
 
 ---
 
@@ -141,5 +140,6 @@ bash <skill_dir>/script/submit-module.sh \
 - 提交时脚本自动包含**全部模块**，不会丢失其他模块数据
 - 配置非草稿态时 `draft` 会报错，需改用 `submit`
 - SSO 登录态失效时脚本输出登录 URL，提示用户登录后重试
-- porch session 失效时提示运行 `set-porch-session.sh` 更新
 - config_id 从 ditto 链接末尾数字提取
+- submit-module.sh 不能用命令行传 query 响应（超长），需用临时文件传递
+- 提交数据中的 plantDetail 等嵌套对象字段，Ditto 期望的是 **JSON 字符串**而非对象，提交前须 `json.dumps()` 序列化
